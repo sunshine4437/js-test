@@ -23,8 +23,8 @@ window.onload = function(){
           document.head.appendChild(js1);
           document.head.appendChild(js2);
         //   this.test1();
+
       }
   })
 }
-
 

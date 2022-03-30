@@ -1,11 +1,22 @@
 var test2 = function(){
     new Vue({
-        created:function(){
-            console.log("created");
+        el:'#app',
+        // template:'<button>test</button>',
+        methods:{
+            sample:function(){
+                console.log("sample");
+                document.querySelector('#app').innerHTML += '<button @click="sample">sample</button>'
+            }
         },
         mounted:function(){
-            console.log("mounted");
-        }
+            console.log("mounted2");
+        },
+        created:function(){
+            console.log("created2");
+            document.querySelector('#app').innerHTML += '<button @click="sample">ffff</button>'
+        },
     })
 }
-test2();
+test();
+// test2();
+// test();
