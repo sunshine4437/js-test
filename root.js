@@ -1,0 +1,1 @@
+function root (){console.log("root.js");}
