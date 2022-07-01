@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <script>
+      function addNewLines(str) {
+        var finalString = "";
+        while (str.length > 0) {
+          finalString += str.substring(0, 64) + "\n";
+          str = str.substring(64);
+        }
+
+        return finalString;
+      }
+
+      function toPemPrivate(privateKey) {
+        var b64 = addNewLines(arrayBufferToBase64(privateKey));
+        var pem = "-----BEGIN PRIVATE KEY-----\n" + b64 + "-----END PRIVATE KEY-----";
+
+        return pem;
+      }
+      function toPemPublic(publicKey) {
+        var b64 = addNewLines(arrayBufferToBase64(publicKey));
+        var pem = "-----BEGIN PUBLIC KEY-----\n" + b64 + "-----END PUBLIC KEY-----";
+
+        return pem;
+      }
+
+      function arrayBufferToBase64(arrayBuffer) {
+        var byteArray = new Uint8Array(arrayBuffer);
+        var byteString = "";
+        for (var i = 0; i < byteArray.byteLength; i++) {
+          byteString += String.fromCharCode(byteArray[i]);
+        }
+        var b64 = window.btoa(byteString);
+
+        return b64;
+      }
+      function _base64ToArrayBuffer(base64) {
+        var binary_string = window.atob(base64);
+        var len = binary_string.length;
+        console.log(len);
+        var bytes = new Uint8Array(len);
+        for (var i = 0; i < len; i++) {
+          bytes[i] = binary_string.charCodeAt(i);
+        }
+        return bytes.buffer;
+      }
+      function convertPemToBinary(pem) {
+        var lines = pem.split("\n");
+        var encoded = "";
+        for (var i = 0; i < lines.length; i++) {
+          if (
+            lines[i].trim().length > 0 &&
+            lines[i].indexOf("-BEGIN RSA PRIVATE KEY-") < 0 &&
+            lines[i].indexOf("-BEGIN RSA PUBLIC KEY-") < 0 &&
+            lines[i].indexOf("-BEGIN PUBLIC KEY-") < 0 &&
+            lines[i].indexOf("-BEGIN PRIVATE KEY-") < 0 &&
+            lines[i].indexOf("-END RSA PRIVATE KEY-") < 0 &&
+            lines[i].indexOf("-END RSA PUBLIC KEY-") < 0 &&
+            lines[i].indexOf("-END PUBLIC KEY-") < 0 &&
+            lines[i].indexOf("-END PRIVATE KEY-") < 0
+          ) {
+            encoded += lines[i].trim();
+          }
+        }
+        return encoded;
+      }
+
+      var test1 = function () {
+        var plain = "abcdefghjklmnopqrstuvwxyz";
+        console.log("평문", plain);
+        var plain_base64 = btoa(plain);
+        console.log("평문 base64", btoa(plain));
+        window.crypto.subtle
+          .generateKey(
+            {
+              name: "RSA-OAEP",
+              modulusLength: 2048, // can be 1024, 2048 or 4096
+              publicExponent: new Uint8Array([0x01, 0x00, 0x01]),
+              hash: { name: "SHA-256" }, // or SHA-512
+            },
+            true,
+            ["encrypt", "decrypt"]
+          )
+          .then(function (keyPair) {
+            // 암호화
+            window.crypto.subtle
+              .encrypt(
+                {
+                  name: "RSA-OAEP",
+                },
+                keyPair.publicKey,
+                _base64ToArrayBuffer(plain_base64)
+              )
+              .then((e) => {
+                console.log("암호문 데이터", e);
+                var encryptText = arrayBufferToBase64(e);
+                console.log("암호문 base64", encryptText);
+                // 복호화
+                console.log("복호화 시작");
+                window.crypto.subtle
+                  .decrypt(
+                    {
+                      name: "RSA-OAEP",
+                    },
+                    keyPair.privateKey,
+                    _base64ToArrayBuffer(encryptText)
+                  )
+                  .then((e) => {
+                    console.log("복호화 데이터", e);
+                    console.log("복호화 base64", arrayBufferToBase64(e));
+                    console.log("복화화 string", atob(arrayBufferToBase64(e)));
+                  });
+              });
+          });
+      };
+      var test2 = function () {
+        // 키 생성
+
+        window.crypto.subtle
+          .generateKey(
+            {
+              name: "RSA-OAEP",
+              modulusLength: 2048, // can be 1024, 2048 or 4096
+              publicExponent: new Uint8Array([0x01, 0x00, 0x01]),
+              hash: { name: "SHA-256" }, // or SHA-512
+            },
+            true,
+            ["encrypt", "decrypt"]
+          )
+          .then(function (keyPair) {
+            window.crypto.subtle
+              .exportKey("pkcs8", keyPair.privateKey)
+              .then(function (key) {
+                console.log("브라우저 자체 RSA 키 생성");
+                var b64str = toPemPrivate(key);
+                document.getElementById("privateKey").value = b64str;
+                b64str = convertPemToBinary(b64str);
+                byteStr = _base64ToArrayBuffer(b64str);
+                window.crypto.subtle
+                  .importKey(
+                    "pkcs8",
+                    byteStr,
+                    {
+                      name: "RSA-OAEP",
+                      hash: "SHA-256",
+                    },
+                    true,
+                    ["decrypt", "unwrapKey"]
+                  )
+                  .then((e) => {
+                    console.log(e);
+                  });
+              })
+              .catch(function (err) {
+                console.log(err);
+              });
+
+            window.crypto.subtle
+              .exportKey("spki", keyPair.publicKey)
+              .then(function (key) {
+                var b64str = toPemPublic(key);
+                document.getElementById("publicKey").value = b64str;
+                b64str = convertPemToBinary(b64str);
+                byteStr = _base64ToArrayBuffer(b64str);
+                window.crypto.subtle
+                  .importKey(
+                    "spki",
+                    byteStr,
+                    {
+                      name: "RSA-OAEP",
+                      hash: "SHA-256",
+                    },
+                    true,
+                    ["encrypt", "wrapKey"]
+                  )
+                  .then((e) => {
+                    console.log(e);
+                  });
+              })
+              .catch(function (err) {
+                console.log(err);
+              });
+          });
+      };
+
+      var encTest = function () {
+        var publicKey = document.getElementById("publicKey").value;
+        var plainText = document.getElementById("plainText").value;
+        var plainBase64 = btoa(plainText);
+        publicKey = convertPemToBinary(publicKey);
+        publicKey = _base64ToArrayBuffer(publicKey);
+        window.crypto.subtle
+          .importKey(
+            "spki",
+            publicKey,
+            {
+              name: "RSA-OAEP",
+              hash: "SHA-256",
+            },
+            false,
+            ["encrypt"]
+          )
+          .then(function (publicKey) {
+            window.crypto.subtle
+              .encrypt(
+                {
+                  name: "RSA-OAEP",
+                },
+                publicKey,
+                _base64ToArrayBuffer(plainBase64)
+              )
+              .then(function (e) {
+                var encBase64 = arrayBufferToBase64(e);
+                document.getElementById("encText").value = encBase64;
+              })
+              .catch(function (err) {
+                console.log(err);
+              });
+          });
+      };
+      var decTest = function () {
+        var privateKey = document.getElementById("privateKey").value;
+        var encText = document.getElementById("encText").value;
+        privateKey = convertPemToBinary(privateKey);
+        privateKey = _base64ToArrayBuffer(privateKey);
+
+        window.crypto.subtle
+          .importKey(
+            "pkcs8",
+            privateKey,
+            {
+              name: "RSA-OAEP",
+              hash: "SHA-256",
+            },
+            false,
+            ["decrypt"]
+          )
+          .then((privateKey) => {
+            window.crypto.subtle
+              .decrypt(
+                {
+                  name: "RSA-OAEP",
+                },
+                privateKey,
+                _base64ToArrayBuffer(encText)
+              )
+              .then((e) => {
+                console.log("복호화 데이터", e);
+                console.log("복호화 base64", arrayBufferToBase64(e));
+                console.log("복화화 string", atob(arrayBufferToBase64(e)));
+
+                document.getElementById("decText").value = atob(arrayBufferToBase64(e));
+              });
+          });
+      };
+
+      function downloadTest(filename, text) {
+        var element = document.createElement("a");
+        element.setAttribute("href", "data:text/plain;charset=utf-8," + encodeURIComponent(text));
+        element.setAttribute("download", filename);
+
+        element.style.display = "none";
+        document.body.appendChild(element);
+
+        element.click();
+
+        document.body.removeChild(element);
+      }
+    </script>
+  </head>
+  <body>
+    <div style="display: flex">
+      <div style="display: inline-block">
+        <div style="display: flex">
+          <div style="display: flex; flex-direction: column">
+            <span>publicKey</span>
+            <textarea id="publicKey" rows="20" cols="64"></textarea>
+          </div>
+          <div style="display: flex; flex-direction: column">
+            <span>privateKey</span>
+            <textarea id="privateKey" rows="20" cols="64"></textarea>
+          </div>
+        </div>
+
+        <div style="display: flex">
+          <div style="display: flex; flex-direction: column">
+            <span>암호문</span>
+            <textarea id="encText" rows="20" cols="64"></textarea>
+          </div>
+          <div style="display: flex; flex-direction: column">
+            <span>복호문</span>
+            <textarea id="decText" rows="20" cols="64"></textarea>
+          </div>
+        </div>
+        <div style="display: flex">
+          <div style="display: flex; flex-direction: column">
+            평문 <textarea id="plainText" rows="20" cols="64">abcdefghjklmnopqrstuvwxyz</textarea>
+          </div>
+        </div>
+      </div>
+      <div style="display: inline-block; flex-direction: column; margin: 50px 10px">
+        <div><button onclick="test1()">암복호화 과정</button></div>
+        <div><button onclick="test2()">키 생성</button></div>
+        <div><button onclick="encTest()">암호화</button></div>
+        <div><button onclick="decTest()">복호화</button></div>
+        <div><button onclick="downloadTest('key.pem','test')">다운로드</button></div>
+      </div>
+    </div>
+
+    <div>
+      참조 문서
+      <div>
+        <a href="https://github.com/safebash/opencrypto">https://github.com/safebash/opencrypto</a>
+      </div>
+      <div>
+        <a href="https://runebook.dev/ko/docs/dom/subtlecrypto/importkey#examples"
+          >https://runebook.dev/ko/docs/dom/subtlecrypto/importkey#examples</a
+        >
+      </div>
+      <div>
+        <a
+          href="https://stackoverflow.com/questions/71833845/subtlecrypto-invalidaccesserror-the-key-is-not-of-the-expected-type-when-try"
+          >https://stackoverflow.com/questions/71833845/subtlecrypto-invalidaccesserror-the-key-is-not-of-the-expected-type-when-try</a
+        >
+      </div>
+    </div>
+  </body>
+</html>
